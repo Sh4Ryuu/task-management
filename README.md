@@ -114,7 +114,6 @@ A modern, feature-rich task and project management mobile application built with
 - **Without Dependencies**: 
   1. Edit the task
   2. Set status to "In Progress"
-  3. Use the progress slider or input field to set percentage (0-100%)
 
 ### Viewing Timeline
 1. Navigate to the **Timeline** tab
@@ -126,16 +125,16 @@ A modern, feature-rich task and project management mobile application built with
 
 ## 🛠️ Tech Stack
 
-- **Framework**: React Native 0.81.5
-- **Development Platform**: Expo 54.0.30
-- **Routing**: Expo Router 6.0.21
-- **State Management**: Zustand 5.0.2 + React Query 5.83.0
-- **Storage**: AsyncStorage 2.2.0
+- **Framework**: React Native
+- **Development Platform**: Expo
+- **Routing**: Expo Router
+- **State Management**: Zustand + React Query
+- **Storage**: AsyncStorage 
 - **UI Components**: 
   - Lucide React Native (icons)
   - Expo Linear Gradient
   - React Native Community DateTimePicker
-- **Language**: TypeScript 5.9.2
+- **Language**: TypeScript 
 
 
 ## 👤 Author
