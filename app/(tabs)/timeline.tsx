@@ -6,8 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   useWindowDimensions,
+  Modal,
 } from "react-native";
-import { Filter } from "lucide-react-native";
+import { Filter, X, ArrowRight } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useProjects } from "@/hooks/useProjectStore";
 import { Task } from "@/types/project";
@@ -19,11 +20,20 @@ export default function TimelineScreen() {
   const [selectedPeriod, setSelectedPeriod] = useState<
     "week" | "month" | "quarter"
   >("month");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [showProjectFilter, setShowProjectFilter] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const { width } = useWindowDimensions();
   const TIMELINE_WIDTH = width * 2;
 
   const allTasks = getAllTasks();
+  const filteredTasks = selectedProjectId
+    ? allTasks.filter((task) => task.projectId === selectedProjectId)
+    : allTasks;
+
+  const selectedProject = selectedProjectId
+    ? projects.find((p) => p.id === selectedProjectId)
+    : null;
 
   const generateDateRange = () => {
     const today = new Date();
@@ -77,8 +87,35 @@ export default function TimelineScreen() {
   };
 
   const getTaskColor = (task: Task) => {
-    const project = projects.find((p) => p.id === task.projectId);
-    return project?.color || "#6366f1";
+    // Color based on status: green for completed, yellow for in-progress, gray for todo
+    switch (task.status) {
+      case "completed":
+        return "#10b981"; // green
+      case "in-progress":
+        return "#f59e0b"; // yellow/orange
+      default:
+        return "#6b7280"; // gray
+    }
+  };
+
+  // Get dependency line positions
+  const getDependencyLine = (task: Task, dependentTaskId: string) => {
+    const taskIndex = filteredTasks.findIndex((t) => t.id === task.id);
+    const depIndex = filteredTasks.findIndex((t) => t.id === dependentTaskId);
+    
+    if (taskIndex === -1 || depIndex === -1 || taskIndex <= depIndex) return null;
+    
+    const taskPos = getTaskPosition(task);
+    const depTask = filteredTasks[depIndex];
+    const depPos = getTaskPosition(depTask);
+    
+    // Calculate connection points
+    const fromX = depPos.left + depPos.width; // End of dependency task
+    const fromY = depIndex * 60 + 25; // Middle of dependency task row
+    const toX = taskPos.left; // Start of current task
+    const toY = taskIndex * 60 + 25; // Middle of current task row
+    
+    return { fromX, fromY, toX, toY, taskIndex, depIndex };
   };
 
   const renderTimelineHeader = () => (
@@ -96,6 +133,76 @@ export default function TimelineScreen() {
       ))}
     </View>
   );
+
+  const handleProjectFilter = (projectId: string | null) => {
+    setSelectedProjectId(projectId);
+    setShowProjectFilter(false);
+  };
+
+  const renderDependencyLines = () => {
+    const lines: JSX.Element[] = [];
+    
+    filteredTasks.forEach((task) => {
+      if (task.dependencies && task.dependencies.length > 0) {
+        task.dependencies.forEach((depId) => {
+          const lineData = getDependencyLine(task, depId);
+          if (lineData) {
+            const { fromX, fromY, toX, toY } = lineData;
+            const horizontalWidth = Math.max(20, toX - fromX);
+            const verticalHeight = Math.abs(toY - fromY);
+            
+            lines.push(
+              <View
+                key={`${task.id}-${depId}`}
+                style={styles.dependencyLineContainer}
+              >
+                {/* Horizontal line from dependency end */}
+                <View
+                  style={[
+                    styles.dependencyLineSegment,
+                    {
+                      left: fromX,
+                      top: fromY - 1,
+                      width: horizontalWidth,
+                      height: 2,
+                    },
+                  ]}
+                />
+                {/* Vertical line */}
+                {verticalHeight > 0 && (
+                  <View
+                    style={[
+                      styles.dependencyLineSegment,
+                      {
+                        left: toX - 1,
+                        top: Math.min(fromY, toY),
+                        width: 2,
+                        height: verticalHeight,
+                      },
+                    ]}
+                  />
+                )}
+                {/* Arrow at task start */}
+                <View
+                  style={[
+                    styles.dependencyArrow,
+                    {
+                      left: toX - 6,
+                      top: toY - 6,
+                    },
+                  ]}
+                >
+                  <ArrowRight size={12} color="#6366f1" />
+                </View>
+              </View>
+            );
+          }
+        });
+      }
+    });
+    
+    return lines;
+  };
 
   const renderTaskBar = (task: Task, index: number) => {
     if (!task?.title?.trim()) return null;
@@ -128,9 +235,11 @@ export default function TimelineScreen() {
             <Text style={styles.taskBarText} numberOfLines={1}>
               {task.title.trim()}
             </Text>
-            <View
-              style={[styles.progressOverlay, { width: `${task.progress}%` }]}
-            />
+            {task.status === "in-progress" && (
+              <View
+                style={[styles.progressOverlay, { width: `${task.progress}%` }]}
+              />
+            )}
           </View>
         </View>
       </View>
@@ -149,10 +258,22 @@ export default function TimelineScreen() {
         <View style={styles.headerContent}>
           <View>
             <Text style={styles.headerTitle}>Timeline</Text>
-            <Text style={styles.headerSubtitle}>Gantt Chart View</Text>
+            <Text style={styles.headerSubtitle}>
+              {selectedProject
+                ? `${selectedProject.title} - Gantt Chart View`
+                : "Global - Gantt Chart View"}
+            </Text>
           </View>
-          <TouchableOpacity style={styles.filterButton}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            onPress={() => setShowProjectFilter(true)}
+          >
             <Filter size={20} color="white" />
+            {selectedProjectId && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>1</Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -195,10 +316,11 @@ export default function TimelineScreen() {
               <View
                 style={[
                   styles.tasksContainer,
-                  { height: allTasks.length * 60 + 40 },
+                  { height: filteredTasks.length * 60 + 40 },
                 ]}
               >
-                {allTasks.map((task, index) => renderTaskBar(task, index))}
+                {renderDependencyLines()}
+                {filteredTasks.map((task, index) => renderTaskBar(task, index))}
               </View>
             </ScrollView>
           </View>
@@ -219,6 +341,86 @@ export default function TimelineScreen() {
           <Text style={styles.legendText}>To Do</Text>
         </View>
       </View>
+
+      <Modal
+        visible={showProjectFilter}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowProjectFilter(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowProjectFilter(false)}
+        >
+          <View style={styles.filterModal}>
+            <View style={styles.filterModalHeader}>
+              <Text style={styles.filterModalTitle}>Filter by Project</Text>
+              <TouchableOpacity
+                onPress={() => setShowProjectFilter(false)}
+                style={styles.closeButton}
+              >
+                <X size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.filterModalContent}>
+              <TouchableOpacity
+                style={[
+                  styles.filterOption,
+                  !selectedProjectId && styles.selectedFilterOption,
+                ]}
+                onPress={() => handleProjectFilter(null)}
+              >
+                <Text
+                  style={[
+                    styles.filterOptionText,
+                    !selectedProjectId && styles.selectedFilterOptionText,
+                  ]}
+                >
+                  All Projects (Global)
+                </Text>
+                {!selectedProjectId && (
+                  <View style={styles.filterCheckmark}>
+                    <Text style={styles.filterCheckmarkText}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              {projects.map((project) => (
+                <TouchableOpacity
+                  key={project.id}
+                  style={[
+                    styles.filterOption,
+                    selectedProjectId === project.id &&
+                      styles.selectedFilterOption,
+                  ]}
+                  onPress={() => handleProjectFilter(project.id)}
+                >
+                  <View
+                    style={[
+                      styles.projectColorIndicator,
+                      { backgroundColor: project.color },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.filterOptionText,
+                      selectedProjectId === project.id &&
+                        styles.selectedFilterOptionText,
+                    ]}
+                  >
+                    {project.title}
+                  </Text>
+                  {selectedProjectId === project.id && (
+                    <View style={styles.filterCheckmark}>
+                      <Text style={styles.filterCheckmarkText}>✓</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -256,6 +458,99 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     justifyContent: "center",
     alignItems: "center",
+    position: "relative",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    backgroundColor: "#ef4444",
+    borderRadius: 10,
+    width: 18,
+    height: 18,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#6366f1",
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "white",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterModal: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    width: "85%",
+    maxHeight: "70%",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  filterModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
+  filterModalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#1f2937",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  filterModalContent: {
+    maxHeight: 400,
+  },
+  filterOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f3f4f6",
+  },
+  selectedFilterOption: {
+    backgroundColor: "#eef2ff",
+  },
+  projectColorIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  filterOptionText: {
+    fontSize: 16,
+    color: "#1f2937",
+    flex: 1,
+  },
+  selectedFilterOptionText: {
+    color: "#6366f1",
+    fontWeight: "600",
+  },
+  filterCheckmark: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#6366f1",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  filterCheckmarkText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "bold",
   },
   periodSelector: {
     flexDirection: "row",
@@ -376,6 +671,27 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: "rgba(255,255,255,0.3)",
     borderRadius: 4,
+  },
+  dependencyLineContainer: {
+    position: "absolute",
+    zIndex: 1,
+    pointerEvents: "none",
+  },
+  dependencyLineSegment: {
+    position: "absolute",
+    backgroundColor: "#6366f1",
+    opacity: 0.6,
+  },
+  dependencyArrow: {
+    position: "absolute",
+    backgroundColor: "white",
+    borderRadius: 6,
+    padding: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
   },
   legend: {
     flexDirection: "row",

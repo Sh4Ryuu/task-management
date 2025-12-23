@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Stack, router } from "expo-router";
+import { Stack, router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Calendar, Palette } from "lucide-react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useProjects } from "@/hooks/useProjectStore";
 import { ProjectStatus } from "@/types/project";
 
@@ -34,7 +36,11 @@ const PROJECT_STATUSES: { value: ProjectStatus; label: string }[] = [
 ];
 
 export default function CreateProjectScreen() {
-  const { addProject } = useProjects();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { addProject, updateProject, getProject } = useProjects();
+  const isEditing = !!id;
+  const existingProject = id ? getProject(id) : null;
+
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [status, setStatus] = useState<ProjectStatus>("planning");
@@ -43,6 +49,44 @@ export default function CreateProjectScreen() {
   );
   const [endDate, setEndDate] = useState<string>("");
   const [selectedColor, setSelectedColor] = useState<string>(PROJECT_COLORS[0]);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+
+  // Load existing project data when editing
+  useEffect(() => {
+    if (existingProject) {
+      setTitle(existingProject.title);
+      setDescription(existingProject.description || "");
+      setStatus(existingProject.status);
+      setStartDate(existingProject.startDate);
+      setEndDate(existingProject.endDate);
+      setSelectedColor(existingProject.color);
+    }
+  }, [existingProject]);
+
+  const handleStartDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowStartDatePicker(false);
+    }
+    if (selectedDate) {
+      setStartDate(selectedDate.toISOString().split("T")[0]);
+    }
+    if (Platform.OS === "ios") {
+      setShowStartDatePicker(false);
+    }
+  };
+
+  const handleEndDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setShowEndDatePicker(false);
+    }
+    if (selectedDate) {
+      setEndDate(selectedDate.toISOString().split("T")[0]);
+    }
+    if (Platform.OS === "ios") {
+      setShowEndDatePicker(false);
+    }
+  };
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -60,15 +104,26 @@ export default function CreateProjectScreen() {
       return;
     }
 
-    addProject({
-      title: title.trim(),
-      description: description.trim() || undefined,
-      status,
-      startDate,
-      endDate,
-      color: selectedColor,
-      progress: 0,
-    });
+    if (isEditing && id) {
+      updateProject(id, {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        status,
+        startDate,
+        endDate,
+        color: selectedColor,
+      });
+    } else {
+      addProject({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        status,
+        startDate,
+        endDate,
+        color: selectedColor,
+        progress: 0,
+      });
+    }
 
     router.back();
   };
@@ -88,7 +143,9 @@ export default function CreateProjectScreen() {
           >
             <ArrowLeft size={24} color="white" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>New Project</Text>
+          <Text style={styles.headerTitle}>
+            {isEditing ? "Edit Project" : "New Project"}
+          </Text>
           <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
             <Text style={styles.saveButtonText}>Save</Text>
           </TouchableOpacity>
@@ -131,30 +188,52 @@ export default function CreateProjectScreen() {
           <View style={styles.dateRow}>
             <View style={styles.dateGroup}>
               <Text style={styles.label}>Start Date *</Text>
-              <View style={styles.dateInput}>
+              <TouchableOpacity
+                style={styles.dateInput}
+                onPress={() => setShowStartDatePicker(true)}
+              >
                 <Calendar size={16} color="#6b7280" />
-                <TextInput
-                  style={styles.dateTextInput}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9ca3af"
+                <Text style={styles.dateText}>
+                  {startDate || "Select date"}
+                </Text>
+              </TouchableOpacity>
+              {showStartDatePicker && (
+                <DateTimePicker
+                  value={new Date(startDate || Date.now())}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={handleStartDateChange}
+                  minimumDate={new Date()}
                 />
-              </View>
+              )}
             </View>
 
             <View style={styles.dateGroup}>
               <Text style={styles.label}>End Date *</Text>
-              <View style={styles.dateInput}>
+              <TouchableOpacity
+                style={styles.dateInput}
+                onPress={() => setShowEndDatePicker(true)}
+              >
                 <Calendar size={16} color="#6b7280" />
-                <TextInput
-                  style={styles.dateTextInput}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#9ca3af"
+                <Text style={styles.dateText}>
+                  {endDate || "Select date"}
+                </Text>
+              </TouchableOpacity>
+              {showEndDatePicker && (
+                <DateTimePicker
+                  value={
+                    endDate
+                      ? new Date(endDate)
+                      : startDate
+                        ? new Date(startDate)
+                        : new Date()
+                  }
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={handleEndDateChange}
+                  minimumDate={new Date(startDate || Date.now())}
                 />
-              </View>
+              )}
             </View>
           </View>
         </View>
@@ -299,11 +378,6 @@ const styles = StyleSheet.create({
     borderColor: "#e5e7eb",
   },
   dateText: {
-    fontSize: 16,
-    color: "#1f2937",
-    marginLeft: 8,
-  },
-  dateTextInput: {
     fontSize: 16,
     color: "#1f2937",
     marginLeft: 8,

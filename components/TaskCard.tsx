@@ -104,7 +104,7 @@ export default function TaskCard({
               {formatDate(task.startDate)} - {formatDate(task.endDate)}
             </Text>
 
-            {task.progress > 0 && (
+            {(task.progress > 0 || task.status === "in-progress") && (
               <View style={styles.progressContainer}>
                 <View style={styles.progressBar}>
                   <View

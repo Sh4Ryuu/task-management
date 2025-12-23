@@ -1,15 +1,57 @@
-import React from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Modal,
+  Alert,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Calendar, TrendingUp } from "lucide-react-native";
+import { Calendar, TrendingUp, Edit, Trash2 } from "lucide-react-native";
 import { Project } from "@/types/project";
 
 interface ProjectCardProps {
   project: Project;
   onPress: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export default function ProjectCard({ project, onPress }: ProjectCardProps) {
+export default function ProjectCard({
+  project,
+  onPress,
+  onEdit,
+  onDelete,
+}: ProjectCardProps) {
+  const [showMenu, setShowMenu] = useState(false);
+
+  const handleLongPress = () => {
+    if (onEdit || onDelete) {
+      setShowMenu(true);
+    }
+  };
+
+  const handleEdit = () => {
+    setShowMenu(false);
+    onEdit?.();
+  };
+
+  const handleDelete = () => {
+    setShowMenu(false);
+    Alert.alert(
+      "Delete Project",
+      "Are you sure you want to delete this project? This action cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => onDelete?.(),
+        },
+      ]
+    );
+  };
   const getStatusColor = (status: Project["status"]) => {
     switch (status) {
       case "active":
@@ -33,11 +75,14 @@ export default function ProjectCard({ project, onPress }: ProjectCardProps) {
   };
 
   return (
-    <TouchableOpacity
-      style={styles.container}
-      onPress={onPress}
-      activeOpacity={0.8}
-    >
+    <>
+      <TouchableOpacity
+        style={styles.container}
+        onPress={onPress}
+        onLongPress={handleLongPress}
+        activeOpacity={0.8}
+        delayLongPress={2500}
+      >
       <LinearGradient
         colors={[project.color, project.color + "80"]}
         start={{ x: 0, y: 0 }}
@@ -94,6 +139,40 @@ export default function ProjectCard({ project, onPress }: ProjectCardProps) {
         </View>
       </LinearGradient>
     </TouchableOpacity>
+
+    <Modal
+      visible={showMenu}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowMenu(false)}
+    >
+      <TouchableOpacity
+        style={styles.menuOverlay}
+        activeOpacity={1}
+        onPress={() => setShowMenu(false)}
+      >
+        <View style={styles.menuContainer}>
+          {onEdit && (
+            <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
+              <Edit size={20} color="#6366f1" />
+              <Text style={styles.menuItemText}>Edit Project</Text>
+            </TouchableOpacity>
+          )}
+          {onDelete && (
+            <>
+              {onEdit && <View style={styles.menuDivider} />}
+              <TouchableOpacity style={styles.menuItem} onPress={handleDelete}>
+                <Trash2 size={20} color="#ef4444" />
+                <Text style={[styles.menuItemText, { color: "#ef4444" }]}>
+                  Delete Project
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Modal>
+    </>
   );
 }
 
@@ -199,5 +278,37 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "rgba(255,255,255,0.8)",
     marginLeft: 4,
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  menuContainer: {
+    backgroundColor: "white",
+    borderRadius: 12,
+    minWidth: 200,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  menuItemText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#1f2937",
+    marginLeft: 12,
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: "#e5e7eb",
   },
 });

@@ -187,15 +187,89 @@ export const [ProjectProvider, useProjects] = createContextHook(() => {
     [projects, saveProjects],
   );
 
+  // Calculate progress based on dependencies for in-progress tasks
+  const calculateProgressFromDependencies = useCallback(
+    (task: Task, allProjects: Project[]): number => {
+      if (task.status !== "in-progress" || !task.dependencies || task.dependencies.length === 0) {
+        return task.progress;
+      }
+
+      // Find all dependency tasks
+      const dependencyTasks: Task[] = [];
+      allProjects.forEach((p) => {
+        p.tasks.forEach((t) => {
+          if (task.dependencies?.includes(t.id)) {
+            dependencyTasks.push(t);
+          }
+        });
+      });
+
+      if (dependencyTasks.length === 0) {
+        return task.progress;
+      }
+
+      // Calculate progress: percentage of completed dependencies
+      const completedDependencies = dependencyTasks.filter(
+        (t) => t.status === "completed"
+      ).length;
+      const progress = Math.round((completedDependencies / dependencyTasks.length) * 100);
+
+      return progress;
+    },
+    []
+  );
+
   const updateTask = useCallback(
     (taskId: string, updates: Partial<Task>) => {
-      const updatedProjects = projects.map((p) => ({
-        ...p,
-        tasks: p.tasks.map((t) => (t.id === taskId ? { ...t, ...updates } : t)),
-      }));
+      let updatedProjects = projects.map((p) => {
+        const task = p.tasks.find((t) => t.id === taskId);
+        if (!task) return p;
+
+        const updatedTask = { ...task, ...updates };
+        
+        // Auto-calculate progress for in-progress tasks with dependencies
+        // Only if progress wasn't explicitly set (manual progress takes precedence when no dependencies)
+        if (
+          updatedTask.status === "in-progress" &&
+          updatedTask.dependencies &&
+          updatedTask.dependencies.length > 0
+        ) {
+          updatedTask.progress = calculateProgressFromDependencies(updatedTask, projects);
+        }
+        // If no dependencies and progress is provided, use the provided progress
+        // (This allows manual progress editing)
+
+        return {
+          ...p,
+          tasks: p.tasks.map((t) => (t.id === taskId ? updatedTask : t)),
+        };
+      });
+
+      // If a task was completed, update progress for all tasks that depend on it
+      if (updates.status === "completed") {
+        updatedProjects = updatedProjects.map((p) => ({
+          ...p,
+          tasks: p.tasks.map((t) => {
+            // Check if this task depends on the completed task
+            if (
+              t.dependencies &&
+              t.dependencies.includes(taskId) &&
+              t.status === "in-progress" &&
+              t.dependencies.length > 0
+            ) {
+              return {
+                ...t,
+                progress: calculateProgressFromDependencies(t, updatedProjects),
+              };
+            }
+            return t;
+          }),
+        }));
+      }
+
       saveProjects(updatedProjects);
     },
-    [projects, saveProjects],
+    [projects, saveProjects, calculateProgressFromDependencies],
   );
 
   const deleteTask = useCallback(

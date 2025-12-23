@@ -14,7 +14,7 @@ import ProjectCard from "@/components/ProjectCard";
 import { Project } from "@/types/project";
 
 export default function ProjectsScreen() {
-  const { projects } = useProjects();
+  const { projects, deleteProject } = useProjects();
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
 
   const filteredProjects = projects.filter((project) => {
@@ -30,6 +30,8 @@ export default function ProjectsScreen() {
     <ProjectCard
       project={item}
       onPress={() => router.push(`/project/${item.id}` as any)}
+      onEdit={() => router.push(`/create-project?id=${item.id}` as any)}
+      onDelete={() => deleteProject(item.id)}
     />
   );
 
