@@ -130,7 +130,6 @@ export default function SettingsScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Version 1.0.0</Text>
-          <Text style={styles.footerText}>Made with ❤️ by Rork</Text>
         </View>
       </ScrollView>
     </View>
