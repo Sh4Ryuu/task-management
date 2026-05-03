@@ -13,7 +13,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { ArrowLeft, Calendar, Palette } from "lucide-react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { AppDatePickerSheet } from "@/components/AppDatePickerSheet";
+import { openAndroidDatePicker } from "@/lib/androidDatePick";
+import { dateToYYYYMMDD, parseDateOnly } from "@/lib/dateOnly";
 import { useProjects } from "@/hooks/useProjectStore";
 import { ProjectStatus } from "@/types/project";
 
@@ -44,9 +46,7 @@ export default function CreateProjectScreen() {
   const [title, setTitle] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [status, setStatus] = useState<ProjectStatus>("planning");
-  const [startDate, setStartDate] = useState<string>(
-    new Date().toISOString().split("T")[0],
-  );
+  const [startDate, setStartDate] = useState<string>(dateToYYYYMMDD(new Date()));
   const [endDate, setEndDate] = useState<string>("");
   const [selectedColor, setSelectedColor] = useState<string>(PROJECT_COLORS[0]);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
@@ -64,29 +64,7 @@ export default function CreateProjectScreen() {
     }
   }, [existingProject]);
 
-  const handleStartDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowStartDatePicker(false);
-    }
-    if (selectedDate) {
-      setStartDate(selectedDate.toISOString().split("T")[0]);
-    }
-    if (Platform.OS === "ios") {
-      setShowStartDatePicker(false);
-    }
-  };
-
-  const handleEndDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowEndDatePicker(false);
-    }
-    if (selectedDate) {
-      setEndDate(selectedDate.toISOString().split("T")[0]);
-    }
-    if (Platform.OS === "ios") {
-      setShowEndDatePicker(false);
-    }
-  };
+  const todayYYYYMM = dateToYYYYMMDD(new Date());
 
   const handleSave = () => {
     if (!title.trim()) {
@@ -99,7 +77,7 @@ export default function CreateProjectScreen() {
       return;
     }
 
-    if (new Date(endDate) <= new Date(startDate)) {
+    if (parseDateOnly(endDate).getTime() <= parseDateOnly(startDate).getTime()) {
       Alert.alert("Error", "End date must be after start date");
       return;
     }
@@ -190,50 +168,62 @@ export default function CreateProjectScreen() {
               <Text style={styles.label}>Start Date *</Text>
               <TouchableOpacity
                 style={styles.dateInput}
-                onPress={() => setShowStartDatePicker(true)}
+                onPress={() => {
+                  if (Platform.OS === "android") {
+                    openAndroidDatePicker({
+                      value: startDate || todayYYYYMM,
+                      minimumDate: todayYYYYMM,
+                      onPick: setStartDate,
+                    });
+                  } else {
+                    setShowStartDatePicker(true);
+                  }
+                }}
               >
                 <Calendar size={16} color="#6b7280" />
                 <Text style={styles.dateText}>
                   {startDate || "Select date"}
                 </Text>
               </TouchableOpacity>
-              {showStartDatePicker && (
-                <DateTimePicker
-                  value={new Date(startDate || Date.now())}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={handleStartDateChange}
-                  minimumDate={new Date()}
-                />
-              )}
+              <AppDatePickerSheet
+                visible={showStartDatePicker}
+                onClose={() => setShowStartDatePicker(false)}
+                value={startDate || todayYYYYMM}
+                minimumDate={todayYYYYMM}
+                title="Start date"
+                onConfirm={setStartDate}
+              />
             </View>
 
             <View style={styles.dateGroup}>
               <Text style={styles.label}>End Date *</Text>
               <TouchableOpacity
                 style={styles.dateInput}
-                onPress={() => setShowEndDatePicker(true)}
+                onPress={() => {
+                  if (Platform.OS === "android") {
+                    openAndroidDatePicker({
+                      value: endDate || startDate || todayYYYYMM,
+                      minimumDate: startDate || todayYYYYMM,
+                      onPick: setEndDate,
+                    });
+                  } else {
+                    setShowEndDatePicker(true);
+                  }
+                }}
               >
                 <Calendar size={16} color="#6b7280" />
                 <Text style={styles.dateText}>
                   {endDate || "Select date"}
                 </Text>
               </TouchableOpacity>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={
-                    endDate
-                      ? new Date(endDate)
-                      : startDate
-                        ? new Date(startDate)
-                        : new Date()
-                  }
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={handleEndDateChange}
-                  minimumDate={new Date(startDate || Date.now())}
-                />
-              )}
+              <AppDatePickerSheet
+                visible={showEndDatePicker}
+                onClose={() => setShowEndDatePicker(false)}
+                value={endDate || startDate || todayYYYYMM}
+                minimumDate={startDate || todayYYYYMM}
+                title="End date"
+                onConfirm={setEndDate}
+              />
             </View>
           </View>
         </View>

@@ -26,7 +26,8 @@ import {
   Minus,
   Plus,
 } from "lucide-react-native";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { AppDatePickerSheet } from "@/components/AppDatePickerSheet";
+import { openAndroidDatePicker } from "@/lib/androidDatePick";
 import { useProjects } from "@/hooks/useProjectStore";
 import { Priority, TaskStatus } from "@/types/project";
 
@@ -170,30 +171,6 @@ export default function TaskDetailScreen() {
     setIsEditing(false);
   };
 
-  const handleStartDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowStartDatePicker(false);
-    }
-    if (selectedDate) {
-      setEditedStartDate(selectedDate.toISOString().split("T")[0]);
-    }
-    if (Platform.OS === "ios") {
-      setShowStartDatePicker(false);
-    }
-  };
-
-  const handleEndDateChange = (event: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      setShowEndDatePicker(false);
-    }
-    if (selectedDate) {
-      setEditedEndDate(selectedDate.toISOString().split("T")[0]);
-    }
-    if (Platform.OS === "ios") {
-      setShowEndDatePicker(false);
-    }
-  };
-
   const handleCancel = () => {
     setIsEditing(false);
   };
@@ -334,7 +311,18 @@ export default function TaskDetailScreen() {
             <View style={styles.timelineCard}>
               <TouchableOpacity
                 style={styles.timelineItem}
-                onPress={() => setShowStartDatePicker(true)}
+                onPress={() => {
+                  if (Platform.OS === "android") {
+                    openAndroidDatePicker({
+                      value: editedStartDate || task.startDate,
+                      minimumDate: project.startDate,
+                      maximumDate: project.endDate,
+                      onPick: setEditedStartDate,
+                    });
+                  } else {
+                    setShowStartDatePicker(true);
+                  }
+                }}
               >
                 <Calendar size={20} color="#6b7280" />
                 <View style={styles.timelineContent}>
@@ -346,19 +334,29 @@ export default function TaskDetailScreen() {
                   </Text>
                 </View>
               </TouchableOpacity>
-              {showStartDatePicker && (
-                <DateTimePicker
-                  value={new Date(editedStartDate || task.startDate)}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={handleStartDateChange}
-                  minimumDate={new Date(project.startDate)}
-                  maximumDate={new Date(project.endDate)}
-                />
-              )}
+              <AppDatePickerSheet
+                visible={showStartDatePicker}
+                onClose={() => setShowStartDatePicker(false)}
+                value={editedStartDate || task.startDate}
+                minimumDate={project.startDate}
+                maximumDate={project.endDate}
+                title="Start date"
+                onConfirm={setEditedStartDate}
+              />
               <TouchableOpacity
                 style={styles.timelineItem}
-                onPress={() => setShowEndDatePicker(true)}
+                onPress={() => {
+                  if (Platform.OS === "android") {
+                    openAndroidDatePicker({
+                      value: editedEndDate || task.endDate,
+                      minimumDate: editedStartDate || task.startDate,
+                      maximumDate: project.endDate,
+                      onPick: setEditedEndDate,
+                    });
+                  } else {
+                    setShowEndDatePicker(true);
+                  }
+                }}
               >
                 <Calendar size={20} color="#6b7280" />
                 <View style={styles.timelineContent}>
@@ -370,16 +368,15 @@ export default function TaskDetailScreen() {
                   </Text>
                 </View>
               </TouchableOpacity>
-              {showEndDatePicker && (
-                <DateTimePicker
-                  value={new Date(editedEndDate || task.endDate)}
-                  mode="date"
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
-                  onChange={handleEndDateChange}
-                  minimumDate={new Date(editedStartDate || task.startDate)}
-                  maximumDate={new Date(project.endDate)}
-                />
-              )}
+              <AppDatePickerSheet
+                visible={showEndDatePicker}
+                onClose={() => setShowEndDatePicker(false)}
+                value={editedEndDate || task.endDate}
+                minimumDate={editedStartDate || task.startDate}
+                maximumDate={project.endDate}
+                title="End date"
+                onConfirm={setEditedEndDate}
+              />
             </View>
           ) : (
             <View style={styles.timelineCard}>

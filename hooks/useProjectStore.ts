@@ -5,99 +5,19 @@ import { Project, Task } from "@/types/project";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_KEY = "projects";
+/** Bumped when stored shape or seed data policy changes; triggers one-time migration. */
+const SCHEMA_KEY = "projects_data_schema";
+const DATA_SCHEMA_VERSION = 2;
 
-const mockProjects: Project[] = [
-  {
-    id: "1",
-    title: "Mobile App Development",
-    description: "Build a new mobile application for our clients",
-    status: "active",
-    startDate: "2024-01-15",
-    endDate: "2024-03-30",
-    color: "#6366f1",
-    progress: 65,
-    tasks: [
-      {
-        id: "1-1",
-        title: "UI/UX Design",
-        description: "Create wireframes and mockups",
-        status: "completed",
-        priority: "high",
-        startDate: "2024-01-15",
-        endDate: "2024-02-01",
-        projectId: "1",
-        progress: 100,
-      },
-      {
-        id: "1-2",
-        title: "Frontend Development",
-        description: "Implement React Native components",
-        status: "in-progress",
-        priority: "high",
-        startDate: "2024-02-01",
-        endDate: "2024-03-15",
-        projectId: "1",
-        progress: 70,
-      },
-      {
-        id: "1-3",
-        title: "Backend API",
-        description: "Develop REST API endpoints",
-        status: "in-progress",
-        priority: "medium",
-        startDate: "2024-02-15",
-        endDate: "2024-03-20",
-        projectId: "1",
-        progress: 40,
-      },
-      {
-        id: "1-4",
-        title: "Testing & QA",
-        description: "Comprehensive testing and bug fixes",
-        status: "todo",
-        priority: "high",
-        startDate: "2024-03-15",
-        endDate: "2024-03-30",
-        projectId: "1",
-        progress: 0,
-      },
-    ],
-  },
-  {
-    id: "2",
-    title: "Website Redesign",
-    description: "Modernize company website with new branding",
-    status: "planning",
-    startDate: "2024-02-01",
-    endDate: "2024-04-15",
-    color: "#10b981",
-    progress: 25,
-    tasks: [
-      {
-        id: "2-1",
-        title: "Brand Guidelines",
-        description: "Define new visual identity",
-        status: "completed",
-        priority: "high",
-        startDate: "2024-02-01",
-        endDate: "2024-02-15",
-        projectId: "2",
-        progress: 100,
-      },
-      {
-        id: "2-2",
-        title: "Content Strategy",
-        description: "Plan website content and structure",
-        status: "in-progress",
-        priority: "medium",
-        startDate: "2024-02-10",
-        endDate: "2024-03-01",
-        projectId: "2",
-        progress: 60,
-      },
-    ],
-  },
-];
+/** Titles of the old bundled demo projects (removed from the app; strip from AsyncStorage once). */
+const REMOVED_SEED_PROJECT_TITLES = new Set([
+  "Mobile App Development",
+  "Website Redesign",
+]);
+
+function stripSeedProjects(projects: Project[]): Project[] {
+  return projects.filter((p) => !REMOVED_SEED_PROJECT_TITLES.has(p.title));
+}
 
 export const [ProjectProvider, useProjects] = createContextHook(() => {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
@@ -107,15 +27,31 @@ export const [ProjectProvider, useProjects] = createContextHook(() => {
     queryKey: ["projects"],
     queryFn: async (): Promise<Project[]> => {
       try {
+        const schema = await AsyncStorage.getItem(SCHEMA_KEY);
         const stored = await AsyncStorage.getItem(STORAGE_KEY);
-        if (stored) {
-          return JSON.parse(stored);
+
+        if (!stored) {
+          const initial: Project[] = [];
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+          await AsyncStorage.setItem(SCHEMA_KEY, String(DATA_SCHEMA_VERSION));
+          return initial;
         }
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(mockProjects));
-        return mockProjects;
+
+        let list: Project[] = JSON.parse(stored);
+        if (!Array.isArray(list)) {
+          list = [];
+        }
+
+        if (schema !== String(DATA_SCHEMA_VERSION)) {
+          list = stripSeedProjects(list);
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+          await AsyncStorage.setItem(SCHEMA_KEY, String(DATA_SCHEMA_VERSION));
+        }
+
+        return list;
       } catch (error) {
         console.error("Error loading projects:", error);
-        return mockProjects;
+        return [];
       }
     },
   });
